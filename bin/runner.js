@@ -137,6 +137,12 @@ function parseTestSettings(argv) {
   test_settings.custom_commands_path = settings.custom_commands_path || '';
   test_settings.custom_assertions_path = settings.custom_assertions_path || '';
 
+  if (settings.global_setup_teardown) {
+    var globals = require(path.join(process.cwd(), settings.global_setup_teardown));
+    test_settings.setUp = globals.setUp;
+    test_settings.tearDown = globals.tearDown;
+  }
+
   if (argv.v) {
     test_settings.silent = false;
   }
