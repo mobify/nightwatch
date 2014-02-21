@@ -245,7 +245,7 @@ module.exports = {
     });
   },
 
-  testExecute : function(test) {
+  testExecuteString : function(test) {
     var client = this.client;
 
     this.client.on('selenium:session_create', function(sessionId) {
@@ -256,6 +256,20 @@ module.exports = {
       test.equal(command.request.method, 'POST');
       test.equal(command.data, '{"script":"<script>test();</script>","args":["arg1"]}');
       test.equal(command.request.path, '/wd/hub/session/1352110219202/execute');
+    });
+  },
+
+  testExecuteFunction : function(test) {
+    var client = this.client;
+
+    this.client.on('selenium:session_create', function(sessionId) {
+      var command = protocol.actions.execute.call(client, function() {return test();},
+        ['arg1'], function callback() {
+        test.done();
+      });
+
+      test.equal(command.data, '{"script":"var passedArgs = Array.prototype.slice.call(arguments,0); ' +
+        'return function () {return test();}.apply(window, passedArgs);","args":["arg1"]}');
     });
   },
 
@@ -273,6 +287,19 @@ module.exports = {
     });
   },
 
+  testExecuteAsyncFunction : function(test) {
+    var client = this.client;
+
+    this.client.on('selenium:session_create', function(sessionId) {
+      var command = protocol.actions.execute_async.call(client, function() {return test();},
+        ['arg1'], function callback() {
+          test.done();
+        });
+
+      test.equal(command.data, '{"script":"var passedArgs = Array.prototype.slice.call(arguments,0); ' +
+        'return function () {return test();}.apply(window, passedArgs);","args":["arg1"]}');
+    });
+  },
 
   testFrameDefault : function(test) {
     var client = this.client;
@@ -301,7 +328,7 @@ module.exports = {
     });
   },
 
-  "test mouseButtonDown click left" : function(test) {
+  'test mouseButtonDown click left' : function(test) {
     var client = this.client;
 
     this.client.on('selenium:session_create', function(sessionId) {
@@ -315,7 +342,7 @@ module.exports = {
     });
   },
 
-  "test mouseButtonDown click middle" : function(test) {
+  'test mouseButtonDown click middle' : function(test) {
     var client = this.client;
 
     this.client.on('selenium:session_create', function(sessionId) {
@@ -327,7 +354,7 @@ module.exports = {
     });
   },
 
-  "test mouseButtonDown with callback only" : function(test) {
+  'test mouseButtonDown with callback only' : function(test) {
     var client = this.client;
 
     this.client.on('selenium:session_create', function(sessionId) {
@@ -339,7 +366,7 @@ module.exports = {
     });
   },
 
-  "test mouseButtonUp click right" : function(test) {
+  'test mouseButtonUp click right' : function(test) {
     var client = this.client;
 
     this.client.on('selenium:session_create', function(sessionId) {

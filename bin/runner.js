@@ -31,11 +31,9 @@ cli.command('env')
   .alias('e')
   .defaults('default');
 
-// $ nightwatch -v
 // $ nightwatch --verbose
 cli.command('verbose')
-  .description('Turns on selenium command logging during the session.')
-  .alias('v');
+  .description('Turns on selenium command logging during the session.');
 
 // $ nightwatch -t
 // $ nightwatch --test
@@ -61,12 +59,17 @@ cli.command('filter')
   .description('Specify a filter (glob expression) as the file name format to use when loading the files.')
   .defaults('')
   .alias('f');
-  
+
 // $ nightwatch -s
 // $ nightwatch --skipgroup
 cli.command('help')
   .description('Shows this help.')
   .alias('h');
+
+// $ nightwatch --version
+cli.command('version')
+  .alias('v')
+  .description('Shows version information.');
 
 /**
  * Looks for pattern ${VAR_NAME} in settings
@@ -154,9 +157,12 @@ function parseTestSettings(argv) {
 
 try {
   var argv = cli.init();
-  
+
   if (argv.help) {
     cli.showHelp();
+  } else if (argv.version) {
+    var packageConfig = require(__dirname + '/../package.json');
+    console.log(packageConfig.name + ' v' + packageConfig.version);
   } else {
 
     process.chdir(process.cwd());
