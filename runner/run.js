@@ -5,6 +5,7 @@ var path = require('path');
 var fs = require('fs');
 var util = require('util');
 var child_process = require('child_process');
+var mkpath = require('mkpath');
 var minimatch = require('minimatch');
 var Nightwatch = require('../index.js');
 var Logger = require('../lib/logger.js');
@@ -92,7 +93,7 @@ module.exports = new (function() {
           testresults.skipped += results.skipped;
           testresults.tests += results.tests.length;
           if (this.client.terminated) {
-            callback(testresults);
+            callback(null, testresults);
           } else {
             setTimeout(next, 0);
           }
@@ -108,6 +109,7 @@ module.exports = new (function() {
           testresults.errors++;
           client.terminate();
           error = true;
+          callback(err, testresults);
         }
 
         if (!error) {
@@ -115,7 +117,7 @@ module.exports = new (function() {
         }
 
       } else {
-        callback(testresults);
+        callback(null, testresults);
       }
     }
 
@@ -123,7 +125,7 @@ module.exports = new (function() {
   }
 
   function printResults(testresults) {
-    if (testresults.passed > 0 && testresults.errors == 0 && testresults.failed == 0) {
+    if (testresults.passed > 0 && testresults.errors === 0 && testresults.failed === 0) {
       console.log(Logger.colors.green('\nOK. ' + testresults.passed, Logger.colors.background.black), 'total assertions passed.');
     } else {
       var skipped = '';
@@ -152,18 +154,6 @@ module.exports = new (function() {
     };
   }
 
-  function ensureDir(path, callback) {
-    var mkdir = child_process.spawn('mkdir', ['-p', path]);
-    mkdir.on('error', function (err) {
-      callback(err);
-      callback = function(){};
-    });
-    mkdir.on('exit', function (code) {
-      if (code === 0) callback();
-      else callback(new Error('mkdir exited with code: ' + code));
-    });
-  }
-
   function runFiles(paths, cb, opts) {
     var extensionPattern = /\.js$/;
     if (paths.length == 1 && extensionPattern.test(paths[0])) {
@@ -177,10 +167,10 @@ module.exports = new (function() {
           return cb(err);
         }
         list.sort();
-        
+
         var modules = list.filter(function (filePath) {
           var filename = filePath.split('/').slice(-1)[0];
-          return opts.filter ? 
+          return opts.filter ?
             minimatch(filename, opts.filter) :
             extensionPattern.exec(filePath);
         });
@@ -202,7 +192,7 @@ module.exports = new (function() {
       }
       var pending = list.length;
 
-      if (pending == 0) {
+      if (pending === 0) {
         return done(null, results);
       }
 
@@ -240,19 +230,19 @@ module.exports = new (function() {
     var start = new Date().getTime();
     var modules = {};
     var curModule;
+    var paths;
     var noop = function() {};
-
     client = Nightwatch.client(opts);
 
     if (typeof files == 'string') {
-      var paths = [files];
+      paths = [files];
     } else {
       paths = files.map(function (p) {
         return path.join(process.cwd(), p);
       });
     }
 
-    if (paths.length == 0) {
+    if (paths.length === 0) {
       throw new Error('No tests to run.');
     }
 
@@ -266,19 +256,26 @@ module.exports = new (function() {
     })(finishCallback || noop);
 
     runFiles(paths, function runTestModule(err, fullpaths) {
-      if (!fullpaths || fullpaths.length == 0) {
+      if (!fullpaths || fullpaths.length === 0) {
         Logger.warn('No tests defined!');
         console.log('using source folder', paths);
         return;
       }
 
+      var module;
       var modulePath = fullpaths.shift();
-      var module     = require(modulePath);
+      try {
+        module = require(modulePath);
+      } catch (err) {
+        finishCallback(err);
+        throw err;
+      }
+
       var moduleName = modulePath.split(path.sep).pop();
       globalresults.modules[moduleName] = [];
       console.log('\n' + Logger.colors.cyan('[ ' + moduleName + ' module ]'));
 
-      runModule(module, moduleName, function(testresults) {
+      runModule(module, moduleName, function(err, testresults) {
         globalresults.passed += testresults.passed;
         globalresults.failed += testresults.failed;
         globalresults.errors += testresults.errors;
@@ -296,11 +293,23 @@ module.exports = new (function() {
 
           var output = aditional_opts.output_folder;
           if (output === false) {
-            finishCallback();
+            finishCallback(null);
           } else {
-            ensureDir(output, function() {
-              Reporter.save(globalresults, output);
-              finishCallback();
+            mkpath(output, function(err) {
+              if (err) {
+                console.log(Logger.colors.yellow('Output folder doesn\'t exist and cannot be created.'));
+                console.log(err.stack);
+                finishCallback(null);
+                return;
+              }
+
+              Reporter.save(globalresults, output, function(err) {
+                if (err) {
+                  console.log(Logger.colors.yellow('Warning: Failed to save report file to folder: ' + output));
+                  console.log(err.stack);
+                }
+                finishCallback(null);
+              });
             });
           }
         }

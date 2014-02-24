@@ -31,11 +31,9 @@ cli.command('env')
   .alias('e')
   .defaults('default');
 
-// $ nightwatch -v
 // $ nightwatch --verbose
 cli.command('verbose')
-  .description('Turns on selenium command logging during the session.')
-  .alias('v');
+  .description('Turns on selenium command logging during the session.');
 
 // $ nightwatch -t
 // $ nightwatch --test
@@ -61,12 +59,17 @@ cli.command('filter')
   .description('Specify a filter (glob expression) as the file name format to use when loading the files.')
   .defaults('')
   .alias('f');
-  
+
 // $ nightwatch -s
 // $ nightwatch --skipgroup
 cli.command('help')
   .description('Shows this help.')
   .alias('h');
+
+// $ nightwatch --version
+cli.command('version')
+  .alias('v')
+  .description('Shows version information.');
 
 /**
  * Looks for pattern ${VAR_NAME} in settings
@@ -117,7 +120,7 @@ function readSettings(argv) {
   }
 
   return settings;
-};
+}
 
 /**
  *
@@ -143,7 +146,7 @@ function parseTestSettings(argv) {
     test_settings.tearDown = globals.tearDown;
   }
 
-  if (argv.v) {
+  if (argv.verbose) {
     test_settings.silent = false;
   }
 
@@ -160,9 +163,12 @@ function parseTestSettings(argv) {
 
 try {
   var argv = cli.init();
-  
+
   if (argv.help) {
     cli.showHelp();
+  } else if (argv.version) {
+    var packageConfig = require(__dirname + '/../package.json');
+    console.log(packageConfig.name + ' v' + packageConfig.version);
   } else {
 
     process.chdir(process.cwd());
@@ -184,7 +190,9 @@ try {
       testsource =  (argv.t.indexOf(process.cwd()) === -1) ?
                       path.join(process.cwd(), argv.t) :
                       argv.t;
-      testsource.substr(-3) === '.js' || (testsource += '.js');
+      if (testsource.substr(-3) != '.js') {
+        testsource += '.js';
+      }
       fs.statSync(testsource);
     } else if (typeof argv.g == 'string') {
       testsource = [argv.g];
@@ -206,7 +214,10 @@ try {
         runner.run(testsource, test_settings, {
           output_folder : output_folder,
           selenium : (settings.selenium || null)
-        }, function() {
+        }, function(err) {
+          if (err) {
+            console.log(Logger.colors.red('There was an error while running the test.'));
+          }
           selenium.stopServer();
         });
       });
