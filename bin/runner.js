@@ -15,7 +15,7 @@ cli.command('config')
   .demand(true)
   .description('Path to configuration file')
   .alias('c')
-  .defaults('./settings.json');
+  .defaults('./nightwatch.json');
 
 // $ nightwatch -o
 // $ nightwatch --output
@@ -100,11 +100,19 @@ function readSettings(argv) {
   // use default settings.json file if we haven't received another value
   if (cli.command('config').isDefault(argv.c)) {
     var defaultValue = cli.command('config').defaults();
+    var deprecatedValue = './settings.json';
 
     if (fs.existsSync(defaultValue)) {
       argv.c = path.join(path.resolve('./'), argv.c);
+    } else if (fs.existsSync(deprecatedValue)) {
+      argv.c = path.join(path.resolve('./'), deprecatedValue);
     } else {
-      argv.c = path.join(__dirname, argv.c);
+      var defaultFile = path.join(__dirname, argv.c);
+      if (fs.existsSync(defaultFile)) {
+        argv.c = defaultFile;
+      } else {
+        argv.c = path.join(__dirname, deprecatedValue);
+      }
     }
   } else {
     argv.c = path.resolve(argv.c);
@@ -120,6 +128,24 @@ function readSettings(argv) {
   }
 
   return settings;
+}
+
+/**
+ * Reads globals from an external js or json file
+ * @param {string} file
+ * @returns {*}
+ */
+function readExternalGlobals(file) {
+  try {
+    var fullPath = path.resolve(file);
+    if (fs.existsSync(fullPath)) {
+      return require(fullPath);
+    }
+    throw new Error('External global file could not be located - using '+ file +'.');
+  } catch (err) {
+    err.message = 'Failed to load external global file: ' + err.message;
+    throw err;
+  }
 }
 
 /**
@@ -140,10 +166,16 @@ function parseTestSettings(argv) {
   test_settings.custom_commands_path = settings.custom_commands_path || '';
   test_settings.custom_assertions_path = settings.custom_assertions_path || '';
 
-  if (settings.global_setup_teardown) {
-    var globals = require(path.join(process.cwd(), settings.global_setup_teardown));
-    test_settings.setUp = globals.setUp;
-    test_settings.tearDown = globals.tearDown;
+  if (test_settings.selenium && typeof (test_settings.selenium) == 'object') {
+    for (var prop in test_settings.selenium) {
+      settings.selenium[prop] = test_settings.selenium[prop];
+    }
+  }
+  if (typeof settings.globals == 'string' && settings.globals) {
+    var globals = readExternalGlobals(settings.globals);
+    if (globals && globals.hasOwnProperty(argv.e)) {
+      test_settings.globals = globals[argv.e];
+    }
   }
 
   if (argv.verbose) {
@@ -184,7 +216,7 @@ try {
 
     var test_settings = parseTestSettings(argv);
 
-    // setting the source of the test(s)
+    // setting the path where the tests are located
     var testsource;
     if (typeof argv.t == 'string') {
       testsource =  (argv.t.indexOf(process.cwd()) === -1) ?
@@ -213,6 +245,7 @@ try {
 
         runner.run(testsource, test_settings, {
           output_folder : output_folder,
+          src_folders : settings.src_folders,
           selenium : (settings.selenium || null)
         }, function(err) {
           if (err) {

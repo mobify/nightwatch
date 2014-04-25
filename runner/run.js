@@ -12,10 +12,8 @@ var Logger = require('../lib/logger.js');
 var Reporter = require('./reporters/junit.js');
 
 module.exports = new (function() {
-  'use strict';
-  var seleniumProcess = null;
+  var globalResults = {
   var client;
-  var globalresults = {
     passed : 0,
     failed : 0,
     errors : 0,
@@ -25,13 +23,19 @@ module.exports = new (function() {
     modules : {}
   };
 
-  function runModule(module, moduleName, callback) {
+  function runModule(module, opts, moduleName, callback, finishCallback) {
+    var client;
+    try {
+      client = Nightwatch.client(opts);
+    } catch (err) {
+      console.log(err.stack);
+      finishCallback(err, false);
+      return;
+    }
     var keys   = Object.keys(module);
-    var tests  = [];
     var setUp;
     var tearDown;
-
-    var testresults = {
+    var testResults = {
       passed : 0,
       failed : 0,
       errors : 0,
@@ -40,7 +44,13 @@ module.exports = new (function() {
       steps : keys.slice(0)
     };
 
-    module.client = client;
+    module.client = client.api;
+
+    if (module.disabled === true) {
+      console.log('\nSkipping module: ', Logger.colors.cyan(moduleName));
+      callback(null, false);
+      return;
+    }
 
     if (keys.indexOf('setUp') > -1) {
       setUp = function(clientFn) {
@@ -48,18 +58,20 @@ module.exports = new (function() {
         clientFn();
       };
       keys.splice(keys.indexOf('setUp'), 1);
-      testresults.steps.splice(testresults.steps.indexOf('setUp'), 1);
+      testResults.steps.splice(testResults.steps.indexOf('setUp'), 1);
     } else {
-      setUp = function(callback) {callback();};
+      setUp = function(cb) {
+        cb();
+      };
     }
 
     if (keys.indexOf('tearDown') > -1) {
       tearDown = function(clientFn) {
-        module.tearDown(module.client);
+        module.tearDown(client.api);
         clientFn();
       };
       keys.splice(keys.indexOf('tearDown'), 1);
-      testresults.steps.splice(testresults.steps.indexOf('tearDown'), 1);
+      testResults.steps.splice(testResults.steps.indexOf('tearDown'), 1);
 
     } else {
       tearDown = function(callback) {callback();};
@@ -75,7 +87,7 @@ module.exports = new (function() {
 
         console.log('\nRunning: ', Logger.colors.green(key));
         var test = wrapTest(setUp, tearDown, module[key], module, function onComplete(results, errors) {
-          globalresults.modules[moduleName][key] = {
+          globalResults.modules[moduleName][key] = {
             passed  : results.passed,
             failed  : results.failed,
             errors  : results.errors,
@@ -84,32 +96,32 @@ module.exports = new (function() {
           };
 
           if (Array.isArray(errors) && errors.length) {
-            globalresults.errmessages = globalresults.errmessages.concat(errors);
+            globalResults.errmessages = globalResults.errmessages.concat(errors);
           }
 
-          testresults.passed += results.passed;
-          testresults.failed += results.failed;
-          testresults.errors += results.errors;
-          testresults.skipped += results.skipped;
-          testresults.tests += results.tests.length;
-          if (this.client.terminated) {
-            callback(null, testresults);
+          testResults.passed += results.passed;
+          testResults.failed += results.failed;
+          testResults.errors += results.errors;
+          testResults.skipped += results.skipped;
+          testResults.tests += results.tests.length;
+          if (client.terminated) {
+            callback(null, testResults, keys);
           } else {
             setTimeout(next, 0);
           }
-        });
+        }, client);
 
         var error = false;
         try {
-          test(client);
+          test(client.api);
         } catch (err) {
-          globalresults.errmessages.push(err.message);
+          globalResults.errmessages.push(err.message);
           console.log(Logger.colors.red('\nAn error occured while running the test:'));
           console.log(err.stack);
-          testresults.errors++;
+          testResults.errors++;
           client.terminate();
           error = true;
-          callback(err, testresults);
+          callback(err, testResults);
         }
 
         if (!error) {
@@ -117,29 +129,46 @@ module.exports = new (function() {
         }
 
       } else {
-        callback(null, testresults);
+        callback(null, testResults);
       }
     }
 
     setTimeout(next, 0);
   }
 
-  function printResults(testresults) {
+  function printResults(testresults, modulekeys) {
     if (testresults.passed > 0 && testresults.errors === 0 && testresults.failed === 0) {
       console.log(Logger.colors.green('\nOK. ' + testresults.passed, Logger.colors.background.black), 'total assertions passed.');
     } else {
       var skipped = '';
       if (testresults.skipped) {
-        skipped = ' and ' + Logger.colors.blue(testresults.skipped) + ' skipped.';
+        skipped = ' and ' + Logger.colors.cyan(testresults.skipped) + ' skipped.';
+      }
+      if (modulekeys && modulekeys.length) {
+        modulekeys = modulekeys.map(function(e) {
+          return Logger.colors.cyan('"' + e + '"');
+        });
+        var plural = modulekeys.length > 1 ? 's' : '';
+        skipped += '\nStep' + plural + ' ' + modulekeys.join(', ') + ' skipped.';
       }
       console.log(Logger.colors.light_red('\nTEST FAILURE:'), Logger.colors.red(testresults.errors + testresults.failed) +
       ' assertions failed, ' + Logger.colors.green(testresults.passed) + ' passed' + skipped);
     }
   }
 
-  function wrapTest(setUp, tearDown, fn, context, onComplete) {
-    return function (client) {
-      context.client = client;
+  function processExitListener() {
+    process.on('exit', function(code) {
+      if (globalResults.errors > 0 || globalResults.failed > 0) {
+        process.exit(1);
+      } else {
+        process.exit(code);
+      }
+    });
+  }
+
+  function wrapTest(setUp, tearDown, fn, context, onComplete, client) {
+    return function (c) {
+      context.client = c;
       var clientFn = function () {
         client.once('queue:finished', function(results, errors) {
           tearDown.call(context, function() {
@@ -147,7 +176,7 @@ module.exports = new (function() {
           });
         });
 
-        return fn.call(context, client);
+        return fn.call(context, c);
       };
 
       setUp.call(context, clientFn);
@@ -226,12 +255,42 @@ module.exports = new (function() {
     });
   }
 
+  /**
+   * Get any subfolders relative to the base module path so that we can save the report files into their corresponding subfolders
+   *
+   * @param {string} modulePath
+   * @param {object} aditional_opts
+   * @returns {string}
+   */
+  function getPathDiff(modulePath, aditional_opts) {
+    var pathParts = modulePath.split(path.sep);
+    pathParts.pop();
+
+    var moduleFolder = pathParts.join(path.sep);
+    var diffInFolder = '', srcFolder;
+
+    if (Array.isArray(aditional_opts.src_folders)) {
+      for (var i = 0; i < aditional_opts.src_folders.length; i++) {
+        srcFolder = path.resolve(aditional_opts.src_folders[i]);
+        if (moduleFolder.indexOf(srcFolder) === 0) {
+          diffInFolder = moduleFolder.substring(srcFolder.length);
+          break;
+        }
+      }
+    } else if (typeof aditional_opts.src_folders == 'string') {
+      if (moduleFolder.indexOf(aditional_opts.src_folders) === 0) {
+        diffInFolder = moduleFolder.substring(aditional_opts.src_folders.length);
+      }
+    }
+    return diffInFolder;
+  }
+
   this.run = function runner(files, opts, aditional_opts, finishCallback) {
     var start = new Date().getTime();
     var modules = {};
     var curModule;
     var paths;
-    var noop = function() {};
+
     client = Nightwatch.client(opts);
 
     if (typeof files == 'string') {
@@ -267,55 +326,61 @@ module.exports = new (function() {
       try {
         module = require(modulePath);
       } catch (err) {
-        finishCallback(err);
+        finishCallback(err, false);
         throw err;
       }
 
       var moduleName = modulePath.split(path.sep).pop();
-      globalresults.modules[moduleName] = [];
+      globalResults.modules[moduleName] = [];
       console.log('\n' + Logger.colors.cyan('[ ' + moduleName + ' module ]'));
 
-      runModule(module, moduleName, function(err, testresults) {
-        globalresults.passed += testresults.passed;
-        globalresults.failed += testresults.failed;
-        globalresults.errors += testresults.errors;
-        globalresults.skipped += testresults.skipped;
-        globalresults.tests += testresults.tests;
+      runModule(module, opts, moduleName, function(err, testresults, modulekeys) {
+        if (typeof testresults == 'object') {
+          globalResults.passed += testresults.passed;
+          globalResults.failed += testresults.failed;
+          globalResults.errors += testresults.errors;
+          globalResults.skipped += testresults.skipped;
+          globalResults.tests += testresults.tests;
+        }
+
 
         if (fullpaths.length) {
           setTimeout(function() {
             runTestModule(err, fullpaths);
           }, 0);
         } else {
-          if (testresults.tests != globalresults.tests || testresults.steps.length > 1) {
-            printResults(globalresults);
+          if (testresults.tests != globalResults.tests || testresults.steps.length > 1) {
+            printResults(globalResults, modulekeys);
           }
 
-          var output = aditional_opts.output_folder;
+          var diffInFolder = getPathDiff(modulePath, aditional_opts);
+          var output = path.join(aditional_opts.output_folder, diffInFolder);
+          var success = globalResults.failed === 0 && globalResults.errors === 0;
           if (output === false) {
-            finishCallback(null);
+            finishCallback(null, success);
           } else {
             mkpath(output, function(err) {
               if (err) {
                 console.log(Logger.colors.yellow('Output folder doesn\'t exist and cannot be created.'));
                 console.log(err.stack);
-                finishCallback(null);
+                finishCallback(null, success);
                 return;
               }
 
-              Reporter.save(globalresults, output, function(err) {
+              Reporter.save(globalResults, output, function(err) {
                 if (err) {
                   console.log(Logger.colors.yellow('Warning: Failed to save report file to folder: ' + output));
                   console.log(err.stack);
                 }
-                finishCallback(null);
+                finishCallback(null, success);
               });
             });
           }
         }
-      });
+      }, finishCallback);
     }, opts);
-  };
 
+    processExitListener();
+  };
 })();
 
