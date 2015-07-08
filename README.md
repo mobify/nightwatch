@@ -2,7 +2,7 @@
 
 UI automated testing framework powered by [Node.js](http://nodejs.org/). It uses the [Selenium WebDriver API](https://code.google.com/p/selenium/wiki/JsonWireProtocol).
 
-[![Build Status](https://travis-ci.org/beatfactor/nightwatch.png?branch=master)](https://travis-ci.org/beatfactor/nightwatch) [![NPM version](https://badge.fury.io/js/nightwatch.png)](http://badge.fury.io/js/nightwatch) [![Coverage Status](https://coveralls.io/repos/beatfactor/nightwatch/badge.png?branch=master)](https://coveralls.io/r/beatfactor/nightwatch?branch=master)
+[![Build Status](https://travis-ci.org/nightwatchjs/nightwatch.svg?branch=master)](https://travis-ci.org/nightwatchjs/nightwatch) [![NPM version](https://badge.fury.io/js/nightwatch.png)](http://badge.fury.io/js/nightwatch) [![Coverage Status](https://coveralls.io/repos/beatfactor/nightwatch/badge.svg?branch=master)](https://coveralls.io/r/beatfactor/nightwatch?branch=master)
 
 ***
 
@@ -16,7 +16,7 @@ Nightwatch works with the Selenium standalone server so the first thing you need
 
 Install Node.js and then:
 ```sh
-$ git clone git@github.com:beatfactor/nightwatch.git
+$ git clone git@github.com:nightwatchjs/nightwatch.git
 $ cd nightwatch
 $ npm install
 ```
@@ -31,4 +31,5 @@ $ npm test
 The [Mailing List/Google Group](https://groups.google.com/forum/#!forum/nightwatchjs) is the most appropriate tool for Nightwatch related discussions. In addition, there is a [StackOverflow Nightwatch.js tag](http://stackoverflow.com/questions/tagged/nightwatch.js) at your disposal and [Twitter](https://twitter.com/nightwatchjs).
 
 ### Setup Guides
-Browser specific setup and usage guides along with debugging instructions can be found on the [**Wiki**](https://github.com/beatfactor/nightwatch/wiki).
+Browser specific setup and usage guides along with debugging instructions can be found on the [**Wiki**](https://github.com/nightwatchjs/nightwatch/wiki).
+

@@ -1,4 +1,3 @@
-
 var BASE_PATH = process.env.NIGHTWATCH_COV ? 'lib-cov' : 'lib';
 var path = require('path');
 
@@ -42,6 +41,102 @@ module.exports = {
       test.equals(err, null);
       test.ok('sample' in results.modules);
       test.ok('demoTest' in results.modules.sample.completed);
+      test.done();
+    });
+  },
+
+  testRunRetries : function(test) {
+    test.expect(11);
+    var testsPath = path.join(process.cwd(), '/sampletests/withfailures');
+    this.Runner.run([testsPath], {
+      seleniumPort : 10195,
+      silent : true,
+      output : false,
+      globals : {
+        test : test
+      }
+    }, {
+      output_folder : false,
+      start_session : true,
+      retries: 1
+    }, function(err, results) {
+      test.equals(results.passed, 1);
+      test.equals(results.failed, 1);
+      test.equals(results.errors, 0);
+      test.equals(results.skipped, 0);
+      test.equals(err, null);
+      test.done();
+    });
+  },
+
+  testRunRetriesNoSkipTestcasesOnFail : function(test) {
+    test.expect(15);
+    var testsPath = path.join(process.cwd(), '/sampletests/withfailures');
+    this.Runner.run([testsPath], {
+      seleniumPort : 10195,
+      silent : true,
+      output : false,
+      skip_testcases_on_fail: false,
+      globals : {
+        test : test
+      }
+    }, {
+      output_folder : false,
+      start_session : true,
+      retries: 1
+    }, function(err, results) {
+      test.equals(results.passed, 2);
+      test.equals(results.failed, 2);
+      test.equals(results.errors, 0);
+      test.equals(results.skipped, 0);
+      test.equals(err, null);
+      test.done();
+    });
+  },
+
+  testRunSuiteRetries : function(test) {
+    test.expect(13);
+    var testsPath = path.join(process.cwd(), '/sampletests/withfailures');
+    this.Runner.run([testsPath], {
+      seleniumPort : 10195,
+      silent : true,
+      output : false,
+      globals : {
+        test : test
+      }
+    }, {
+      output_folder : false,
+      start_session : true,
+      suite_retries: 1
+    }, function(err, results) {
+      test.equals(results.passed, 1);
+      test.equals(results.failed, 1);
+      test.equals(results.errors, 0);
+      test.equals(results.skipped, 0);
+      test.equals(err, null);
+      test.done();
+    });
+  },
+
+  testRunSuiteRetriesNoSkipTestcasesOnFail : function(test) {
+    test.expect(13);
+    var testsPath = path.join(process.cwd(), '/sampletests/withfailures');
+    this.Runner.run([testsPath], {
+      seleniumPort : 10195,
+      silent : true,
+      output : false,
+      skip_testcases_on_fail: false,
+      globals : {
+        test : test
+      }
+    }, {
+      output_folder : false,
+      start_session : true,
+      suite_retries: 1
+    }, function(err, results) {
+      test.equals(results.errors, 0);
+      test.equals(results.skipped, 0);
+      test.equals(err, null);
       test.done();
     });
   },
@@ -525,6 +620,24 @@ module.exports = {
           test.equal(client.currentTest.module, 'sampleSingleTest');
           done();
         }
+      }
+    }, {
+      output_folder : false,
+      start_session : true
+    }, function(err, results) {
+      test.equals(err, null);
+      test.done();
+    });
+  },
+
+  testRunCurrentTestInAfterEach : function(test) {
+    var testsPath = path.join(process.cwd(), '/sampletests/withaftereach/sampleSingleTest.js');
+    this.Runner.run([testsPath], {
+      seleniumPort : 10195,
+      silent : true,
+      output : false,
+      globals : {
+        test : test
       }
     }, {
       output_folder : false,
